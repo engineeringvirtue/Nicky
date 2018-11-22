@@ -247,7 +247,7 @@ fn main() {
                 })
         )
 
-        .simple_bucket("long", 1)
+        .simple_bucket("long", 50)
         .group("Nickname Commands", |x|
             x.desc("Nickname commands go here - all require Administrator permission")
                 .bucket("long")
