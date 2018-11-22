@@ -1,0 +1,20 @@
+[package]
+name = "nicky"
+version = "0.1.0"
+authors = ["Thomas-QM <thomas@engineeringvirtue.net>"]
+edition = "2018"
+
+[dependencies]
+serde = "1.0.80"
+serde_derive = "1.0.80"
+
+regex = "1.0.6"
+parking_lot = "0.5.5"
+typemap = "0.3.3"
+rayon = "1.0.3"
+kankyo = "0.2.0"
+serenity = "0.5.11"
+
+[dependencies.rustbreak]
+version = "2.0.0-rc3"
+features = ["bin_enc"]
