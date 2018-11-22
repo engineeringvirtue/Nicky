@@ -10,7 +10,7 @@ extern crate kankyo;
 extern crate serenity;
 extern crate rustbreak;
 
-use std::{sync::{Arc, atomic::{AtomicUsize, Ordering}}, collections::HashMap, thread, time::Duration};
+use std::{sync::{Arc, atomic::{AtomicUsize, Ordering}}, collections::HashMap, thread, time::Duration, str::FromStr};
 
 use serde_derive::{Deserialize, Serialize};
 
@@ -20,7 +20,7 @@ use rayon::prelude::*;
 
 use serenity::prelude::*;
 use serenity::framework::*;
-use serenity::model::{permissions::Permissions, guild::{Guild, Member}, channel::{Message}, id::*};
+use serenity::model::{permissions::Permissions, guild::{Guild, Member, Role}, channel::{Message}, id::*};
 
 use rustbreak::*;
 
@@ -74,19 +74,51 @@ impl DatabaseSaver {
     }
 }
 
+#[derive(Debug, Clone)]
+struct UserOrRole(UserId);
+
+impl FromStr for UserOrRole {
+    type Err = serenity::model::misc::UserIdParseError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        UserId::from_str(s).map(UserOrRole)
+    }
+}
+
+impl UserOrRole {
+    fn as_role(&self, guild: &RwLockReadGuard<Guild>) -> Option<Role> {
+        guild.roles.get(&RoleId(*self.0.as_u64())).cloned()
+    }
+
+    fn get_members(self, guild: &RwLockReadGuard<Guild>) -> Vec<Member> {
+        match self.as_role(guild) {
+            None => guild.member(self.0).ok().map(|x| vec![x]).unwrap_or_else(|| Vec::new()),
+            Some (x) => guild.members.par_iter().map(|(_, m)| m.clone()).filter(|m| m.roles.contains(&x.id)).collect()
+        }
+    }
+
+    fn get_ids(self, guild: &RwLockReadGuard<Guild>) -> Vec<UserId> {
+        match self.as_role(guild) {
+            None => vec![self.0],
+            Some (x) =>
+                guild.members.par_iter().map(|(_, m)| m).filter(|m| m.roles.contains(&x.id))
+                    .map(|x| x.user_id()).collect()
+        }
+    }
+}
+
 enum UserSpec {
-    Include(Vec<UserId>),
-    Exclude(Vec<UserId>),
+    Include(Vec<UserOrRole>),
+    Exclude(Vec<UserOrRole>),
     Everyone
 }
 
 impl UserSpec {
     fn new(mut args: standard::Args) -> Result<Self, standard::CommandError> {
-        match args.clone().multiple::<UserId>() {
+        match args.clone().multiple::<UserOrRole>() {
             Ok(inc) => Ok(UserSpec::Include(inc)),
             Err(_) => {
                 if args.single::<String>().ok() == Some("--".to_owned()) {
-                    let users = args.multiple::<UserId>()
+                    let users = args.multiple::<UserOrRole>()
                         .map_err(|_| "When using --, please specify users to exclude.")?;
 
                     Ok(UserSpec::Exclude(users))
@@ -100,24 +132,15 @@ impl UserSpec {
     fn get_members(self, guild: RwLockReadGuard<Guild>) -> Result<Vec<Member>, standard::CommandError> {
         match self {
             UserSpec::Include(inc) => {
-                let mut members = Vec::new();
-
-                for i in inc.iter() {
-                    if let Some(x) = guild.members.get(i) {
-                        members.push(x.clone());
-                    }
-                }
-
-                Ok(members)
+                Ok(inc.into_par_iter().flat_map(|x: UserOrRole| x.get_members(&guild)).collect())
             },
 
             UserSpec::Exclude(ex) => {
-                Ok(UserSpec::Everyone.get_members(guild)?.into_par_iter().filter(|x| {
-                    !ex.par_iter().find_any(|exx| **exx == x.user_id()).is_some()
-                }).collect())
+                let ex_vec: Vec<UserId> = ex.into_par_iter().flat_map(|x| x.get_ids(&guild)).collect();
+                Ok(UserSpec::Everyone.get_members(guild)?.into_par_iter().filter(|x| !ex_vec.contains(&x.user_id())).collect())
             },
 
-            UserSpec::Everyone => Ok(guild.members.values().map(|x| x.clone()).collect())
+            UserSpec::Everyone => Ok(guild.members.values().cloned().collect())
         }
     }
 
@@ -158,7 +181,7 @@ impl UserSpec {
             let _ = set_stat(&format!("Nicknaming... {} {:.0}% / {}", progressbar, progress_perc*100.0, name));
         };
 
-        mem.into_par_iter().for_each(|x: Member| {
+        mem.into_iter().for_each(|x: Member| {
             let name = x.display_name().to_owned().to_string();
             let new_nick = f(&name);
 
@@ -197,8 +220,7 @@ fn main() {
             x.on_mention(true).dynamic_prefix(|ctx, msg| {
                 let db = ctx.get_db();
                 msg.guild_id.and_then(|x|
-                    db.borrow_data().unwrap().prefixes.get(x.as_u64())
-                        .map(|x| x.to_owned())
+                    db.borrow_data().unwrap().prefixes.get(x.as_u64()).cloned()
                 )
             })
         )
