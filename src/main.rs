@@ -185,8 +185,8 @@ impl UserSpec {
             let name = x.display_name().to_owned().to_string();
             let new_nick = f(&name);
 
-            if let Err(err) = x.edit(|e| e.nickname(&new_nick)) {
-                update_progress(&format!("__***Error whilst renaming {}: {}***__", &name, err))
+            if let Err(_) = x.edit(|e| e.nickname(&new_nick)) {
+                update_progress(&format!("Perhaps I don't have permission to rename **{}**?", &name))
             } else {
                 update_progress(&name);
             }
