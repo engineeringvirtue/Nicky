@@ -247,7 +247,7 @@ fn main() {
                 })
         )
 
-        .simple_bucket("long", 50)
+        .simple_bucket("long", 5)
         .group("Nickname Commands", |x|
             x.desc("Nickname commands go here - all require Administrator permission")
                 .bucket("long")
@@ -341,7 +341,7 @@ fn main() {
                     msg.reply("Make sure you are an administrator!").ok()
                 },
                 standard::DispatchError::RateLimited(secs) => {
-                    msg.reply(&format!("You must wait {} before doing that again!", secs)).ok()
+                    msg.reply(&format!("You must wait {}s before doing that again!", secs)).ok()
                 },
                 _ => None
             };
