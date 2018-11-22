@@ -195,8 +195,9 @@ fn main() {
     client.with_framework({ StandardFramework::new()
         .configure(|x|
             x.on_mention(true).dynamic_prefix(|ctx, msg| {
+                let db = ctx.get_db();
                 msg.guild_id.and_then(|x|
-                    ctx.get_db().borrow_data().unwrap().prefixes.get(x.as_u64())
+                    db.borrow_data().unwrap().prefixes.get(x.as_u64())
                         .map(|x| x.to_owned())
                 )
             })
@@ -235,9 +236,11 @@ fn main() {
                             let prepend_str = args.single_quoted::<String>().map_err(|_| "No prefix found!")?;
                             let spec = UserSpec::new(args)?;
 
-                            spec.nick_members(msg.guild().unwrap().read(), |x| {
+                            let guild = msg.guild().unwrap();
+                            spec.nick_members(guild.read(), |x| {
                                 format!("{}{}", prepend_str, x)
-                            }, msg)
+                            }, msg)?;
+                            Ok(())
                         })
                 ).command("append", |x|
                     x.desc("Append text to nicknames").usage("append \"prefix\" @include -- @exclude")
@@ -245,9 +248,11 @@ fn main() {
                             let append_str = args.single_quoted::<String>().map_err(|_| "No affix found!")?;
                             let spec = UserSpec::new(args)?;
 
-                            spec.nick_members(msg.guild().unwrap().read(), |x| {
+                            let guild = msg.guild().unwrap();
+                            spec.nick_members(guild.read(), |x| {
                                 format!("{}{}", x, append_str)
-                            }, msg)
+                            }, msg)?;
+                            Ok(())
                         })
                 ).command("set", |x|
                     x.desc("Set nicknames").usage("set \"new nickname\" @include -- @exclude")
@@ -255,18 +260,22 @@ fn main() {
                             let set_str = args.single_quoted::<String>().map_err(|_| "No nickname found!")?;
                             let spec = UserSpec::new(args)?;
 
-                            spec.nick_members(msg.guild().unwrap().read(), |_| {
+                            let guild = msg.guild().unwrap();
+                            spec.nick_members(guild.read(), |_| {
                                 set_str.clone()
-                            }, msg)
+                            }, msg)?;
+                            Ok(())
                         })
                 ).command("reset", |x|
                     x.desc("Reset nicknames").usage("reset @include -- @exclude")
                         .exec(|_ctx, msg, args| {
                             let spec = UserSpec::new(args)?;
 
-                            spec.nick_members(msg.guild().unwrap().read(), |_| {
+                            let guild = msg.guild().unwrap();
+                            spec.nick_members(guild.read(), |_| {
                                 "".to_owned()
-                            }, msg)
+                            }, msg)?;
+                            Ok(())
                         })
                 ).command("replace", |x|
                     x.desc("Replace things in nicknames").usage("replace \"old value\" \"new value\" @include -- @exclude")
@@ -276,9 +285,11 @@ fn main() {
 
                             let spec = UserSpec::new(args)?;
 
-                            spec.nick_members(msg.guild().unwrap().read(), |x| {
+                            let guild = msg.guild().unwrap();
+                            spec.nick_members(guild.read(), |x| {
                                 x.replace(&old_str, &new_str)
-                            }, msg)
+                            }, msg)?;
+                            Ok(())
                         })
                 ).command("replace-regex", |x|
                     x.desc("Replace things in nicknames using regex")
@@ -289,9 +300,11 @@ fn main() {
 
                             let spec = UserSpec::new(args)?;
 
-                            spec.nick_members(msg.guild().unwrap().read(), |x| {
+                            let guild = msg.guild().unwrap();
+                            spec.nick_members(guild.read(), |x| {
                                 regex.replace(x, new.as_str()).to_owned().to_string()
-                            }, msg)
+                            }, msg)?;
+                            Ok(())
                         })
                 )
         )
