@@ -229,7 +229,7 @@ fn main() {
             cmd.guild_only(true).desc("Set the prefix of Nicky")
                 .required_permissions(ADMIN_PERM)
                 .exec(|ctx, msg, mut args| {
-                    let a = args.single::<String>()?;
+                    let a = args.single_quoted::<String>()?;
 
                     let l = a.len();
                     if l > 0 && l < 80 {
