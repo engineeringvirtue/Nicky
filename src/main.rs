@@ -150,18 +150,17 @@ impl UserSpec {
         let channel = msg.channel().unwrap();
         let reply = channel.send_message(|x| x.content("Loading..."))?;
 
-        let set_stat = |new_stat: &str| -> Result<(), standard::CommandError> {
-            channel.edit_message(reply.id, |x| x.content(new_stat))?;
-            Ok(())
+        let set_stat = |new_stat: &str| -> bool {
+            channel.edit_message(reply.id, |x| x.content(new_stat)).is_err()
         };
 
-        set_stat("Retrieving members...")?;
+        set_stat("Retrieving members...");
         let mem = self.get_members(guild)?;
 
         let members = mem.len();
 
         let progress = AtomicUsize::new(0);
-        let update_progress = |name: &str| {
+        let update_progress = |name: &str| -> bool {
             let new_progress = progress.load(Ordering::Relaxed)+1;
             progress.store(new_progress, Ordering::Relaxed);
 
@@ -178,21 +177,27 @@ impl UserSpec {
                 progressbar.push(PROGRESS_TBD);
             }
 
-            let _ = set_stat(&format!("Nicknaming... {} {:.0}% / {}", progressbar, progress_perc*100.0, name));
+            set_stat(&format!("Nicknaming... {} {:.0}% / {}", progressbar, progress_perc*100.0, name))
         };
 
-        mem.into_iter().for_each(|x: Member| {
+        for x in mem.into_iter() {
             let name = x.display_name().to_owned().to_string();
             let new_nick = f(&name);
 
-            if let Err(_) = x.edit(|e| e.nickname(&new_nick)) {
-                update_progress(&format!("Perhaps I don't have permission to rename **{}**?", &name))
-            } else {
-                update_progress(&name);
-            }
-        });
+            let err = {
+                if let Err(_) = x.edit(|e| e.nickname(&new_nick)) {
+                    update_progress(&format!("Perhaps I don't have permission to rename **{}**?", &name))
+                } else {
+                    update_progress(&name)
+                }
+            };
 
-        set_stat("Done!")?;
+            if err {
+                break;
+            }
+        }
+
+        set_stat("Done!");
         Ok(())
     }
 }
@@ -249,7 +254,7 @@ fn main() {
 
         .simple_bucket("long", 5)
         .group("Nickname Commands", |x|
-            x.desc("Nickname commands go here - all require Administrator permission")
+            x.desc("Nickname commands go here - all require Administrator permission. Delete the status message to cancel the operation.")
                 .bucket("long")
                 .required_permissions(ADMIN_PERM).guild_only(true)
                 .command("prepend", |x|
@@ -332,8 +337,7 @@ fn main() {
         )
 
         .customised_help(standard::help_commands::with_embeds, |x|
-            x.individual_command_tip("Use ``help <command>`` if you're having trouble with a particular command.")
-                .ungrouped_label("Misc."))
+            x.individual_command_tip("Use ``help <command>`` if you're having trouble with a particular command.").ungrouped_label("Misc."))
 
         .on_dispatch_error(|_ctx, msg, err| {
             let _ = match err {
