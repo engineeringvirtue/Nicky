@@ -1,6 +1,7 @@
 extern crate serde;
 extern crate serde_derive;
 
+extern crate rand;
 extern crate regex;
 extern crate parking_lot;
 extern crate typemap;
@@ -10,10 +11,11 @@ extern crate kankyo;
 extern crate serenity;
 extern crate rustbreak;
 
-use std::{sync::{Arc, atomic::{AtomicUsize, Ordering}}, collections::HashMap, thread, time::Duration, str::FromStr};
+use std::{sync::{Arc, atomic::{AtomicUsize, Ordering}}, fmt, collections::HashMap, thread, time::Duration, str::FromStr};
 
 use serde_derive::{Deserialize, Serialize};
 
+use rand::prelude::*;
 use regex::Regex;
 use parking_lot::RwLockReadGuard;
 use rayon::prelude::*;
@@ -47,11 +49,28 @@ impl GetDB for Context {
     }
 }
 
+struct Percentage(f32);
+
+#[derive(Debug, Clone)]
+struct PercentageParseError;
+impl std::error::Error for PercentageParseError {}
+impl std::fmt::Display for PercentageParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Percentage couldn't be parsed!")
+    }
+}
+
+impl FromStr for Percentage {
+    type Err = PercentageParseError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let num = s.trim_end_matches("%").parse::<f32>().map_err(|_| PercentageParseError)?;
+        Ok(Percentage(num/100.0))
+    }
+}
+
 struct Handler;
 
-impl EventHandler for Handler {
-
-}
+impl EventHandler for Handler {}
 
 const DB_PATH: &str = "db.txt";
 const ADMIN_PERM: Permissions = Permissions::ADMINISTRATOR;
@@ -144,8 +163,8 @@ impl UserSpec {
         }
     }
 
-    fn nick_members<F: Fn(&str) -> String + Sync>
-    (self, guild: RwLockReadGuard<Guild>, f: F, msg: &Message) -> Result<(), standard::CommandError> {
+    fn nick_members<F: FnMut(&str) -> String>
+    (self, guild: RwLockReadGuard<Guild>, mut f: F, msg: &Message) -> Result<(), standard::CommandError> {
 
         let channel = msg.channel().unwrap();
         let reply = channel.send_message(|x| x.content("Loading..."))?;
@@ -330,6 +349,60 @@ fn main() {
                             let guild = msg.guild().unwrap();
                             spec.nick_members(guild.read(), |x| {
                                 regex.replace(x, new.as_str()).to_owned().to_string()
+                            }, msg)?;
+                            Ok(())
+                        })
+                ).command("jitter", |x|
+                    x.desc("Jitter characters in nicknames around")
+                        .usage("jitter intensity% @include -- @exclude")
+                        .exec(|_ctx, msg, mut args| {
+                            let perc = 1.0 - args.single::<Percentage>().unwrap_or(Percentage(1.0)).0;
+                            let spec = UserSpec::new(args)?;
+
+                            let guild = msg.guild().unwrap();
+                            let mut randomizer = rand::thread_rng();
+                            spec.nick_members(guild.read(), |x| {
+                                if x.len() >= 2 {
+                                    let mut s = Vec::new();
+                                    for c in x.chars() {
+                                        let lf = s.len() as f32;
+                                        let offset: f32 = randomizer.gen_range(0.0, 1.0) * lf;
+                                        let idx = (offset + (perc * (lf - offset))).floor() as usize;
+                                        s.insert(idx, c);
+                                    }
+
+                                    s.into_iter().collect()
+                                } else {
+                                    x.to_owned()
+                                }
+                            }, msg)?;
+                            Ok(())
+                        })
+                ).command("jumble", |x|
+                    x.desc("Jumble characters in nicknames")
+                        .usage("jumble \"bunch of characters\" @include -- @exclude")
+                        .exec(|_ctx, msg, mut args| {
+                            let s = args.single_quoted::<String>().map_err(|_| "No characters found!")?;
+                            let slen = s.len();
+                            if slen < 2 {
+                                return Err("You must have at least two characters!".into());
+                            }
+
+                            let spec = UserSpec::new(args)?;
+
+                            let guild = msg.guild().unwrap();
+                            let mut randomizer = rand::thread_rng();
+                            spec.nick_members(guild.read(), |x| {
+                                let mut x = x.to_owned();
+
+                                for c in s.chars() {
+                                    if x.contains(c) {
+                                        let new_c: String = s.chars().nth(randomizer.gen_range(0, slen-1)).unwrap().to_string();
+                                        x = x.replace(c, &new_c);
+                                    }
+                                }
+
+                                x
                             }, msg)?;
                             Ok(())
                         })

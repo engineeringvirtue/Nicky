@@ -7,6 +7,7 @@ authors = ["Thomas-QM <thomas@engineeringvirtue.net>"]
 serde = "1.0.80"
 serde_derive = "1.0.80"
 
+rand = "0.6.1"
 regex = "1.0.6"
 parking_lot = "0.5.5"
 typemap = "0.3.3"
