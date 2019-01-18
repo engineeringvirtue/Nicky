@@ -183,17 +183,11 @@ impl UserSpec {
 
         let progress = AtomicUsize::new(0);
         let update_progress = |name: &str| -> bool {
-            let old_progress = progress.load(Ordering::Relaxed);
-            let new_progress = old_progress+1;
+            let new_progress = progress.load(Ordering::Relaxed)+1;
             progress.store(new_progress, Ordering::Relaxed);
 
-            let old_progressbar_num = (((old_progress as f64)/(members as f64))*12.0).round() as usize;
             let progress_perc: f64 = (new_progress as f64)/(members as f64);
             let progressbar_num = (progress_perc*12.0).round() as usize;
-
-            if old_progressbar_num == progressbar_num {
-                return channel.message(reply.id).is_err();
-            }
 
             let mut progressbar = String::new();
 
