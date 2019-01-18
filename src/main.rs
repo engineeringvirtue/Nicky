@@ -94,30 +94,33 @@ impl DatabaseSaver {
 }
 
 #[derive(Debug, Clone)]
-struct UserOrRole(UserId);
+struct UserOrRole(Result<UserId, String>);
 
 impl FromStr for UserOrRole {
     type Err = serenity::model::misc::UserIdParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        UserId::from_str(s).map(UserOrRole)
+        Ok(UserOrRole(UserId::from_str(s).map_err(|_| s.to_owned())))
     }
 }
 
 impl UserOrRole {
     fn as_role(&self, guild: &RwLockReadGuard<Guild>) -> Option<Role> {
-        guild.roles.get(&RoleId(*self.0.as_u64())).cloned()
+        match &self.0 {
+            Ok(x) => guild.roles.get(&RoleId(*x.as_u64())).cloned(),
+            Err(x) => guild.roles.iter().filter(|(_, r)| r.name.to_lowercase() == x.to_lowercase()).map(|(_, y)| y).next().cloned()
+        }
     }
 
     fn get_members(self, guild: &RwLockReadGuard<Guild>) -> Vec<Member> {
         match self.as_role(guild) {
-            None => guild.member(self.0).ok().map(|x| vec![x]).unwrap_or_else(|| Vec::new()),
+            None => self.0.ok().and_then(|x | guild.member(x).ok()).map(|x| vec![x]).unwrap_or_else(|| Vec::new()),
             Some (x) => guild.members.par_iter().map(|(_, m)| m.clone()).filter(|m| m.roles.contains(&x.id)).collect()
         }
     }
 
     fn get_ids(self, guild: &RwLockReadGuard<Guild>) -> Vec<UserId> {
         match self.as_role(guild) {
-            None => vec![self.0],
+            None => self.0.map(|x| vec![x]).unwrap_or_else(|_| Vec::new()),
             Some (x) =>
                 guild.members.par_iter().map(|(_, m)| m).filter(|m| m.roles.contains(&x.id))
                     .map(|x| x.user_id()).collect()
