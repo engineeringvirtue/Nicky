@@ -192,7 +192,7 @@ impl UserSpec {
             let progressbar_num = (progress_perc*12.0).round() as usize;
 
             if old_progressbar_num == progressbar_num {
-                channel.message(reply.id).is_err();
+                return channel.message(reply.id).is_err();
             }
 
             let mut progressbar = String::new();
