@@ -73,7 +73,7 @@ struct Handler;
 impl EventHandler for Handler {}
 
 const DB_PATH: &str = "db.txt";
-const ADMIN_PERM: Permissions = Permissions::ADMINISTRATOR;
+const ADMIN_PERM: Permissions = Permissions::CHANGE_NICKNAME;
 
 const PROGRESS_DONE: char = '█';
 const PROGRESS_TBD: char = '░';
@@ -434,5 +434,7 @@ fn main() {
         })
     });
 
-    client.start_autosharded().unwrap();
+    loop {
+        let _ = client.start_autosharded();
+    }
 }
