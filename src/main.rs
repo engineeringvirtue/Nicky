@@ -11,7 +11,7 @@ extern crate kankyo;
 extern crate serenity;
 extern crate rustbreak;
 
-use std::{sync::{Arc, atomic::{AtomicUsize, Ordering}}, fmt, collections::HashMap, thread, time::Duration, str::FromStr};
+use std::{sync::Arc fmt, collections::HashMap, thread, time::Duration, str::FromStr};
 
 use serde_derive::{Deserialize, Serialize};
 
@@ -73,7 +73,7 @@ struct Handler;
 impl EventHandler for Handler {}
 
 const DB_PATH: &str = "db.txt";
-const ADMIN_PERM: Permissions = Permissions::CHANGE_NICKNAME;
+const ADMIN_PERM: Permissions = Permissions::MANAGE_NICKNAMES;
 
 const PROGRESS_DONE: char = '█';
 const PROGRESS_TBD: char = '░';
@@ -181,12 +181,11 @@ impl UserSpec {
 
         let members = mem.len();
 
-        let progress = AtomicUsize::new(0);
-        let update_progress = |name: &str| -> bool {
-            let new_progress = progress.load(Ordering::Relaxed)+1;
-            progress.store(new_progress, Ordering::Relaxed);
+        let mut progress = 0;
+        let mut update_progress = |name: &str| -> bool {
+            progress += 1;
 
-            let progress_perc: f64 = (new_progress as f64)/(members as f64);
+            let progress_perc: f64 = (progress as f64)/(members as f64);
             let progressbar_num = (progress_perc*12.0).round() as usize;
 
             let mut progressbar = String::new();
@@ -199,7 +198,15 @@ impl UserSpec {
                 progressbar.push(PROGRESS_TBD);
             }
 
-            set_stat(&format!("Nicknaming... {} {:.0}% / {}", progressbar, progress_perc*100.0, name))
+            let random_unux_slashy_thing_someone_invented =
+                match progress%3 {
+                    0 => "/", 1 => ".", _ => "\\"
+                };
+
+            
+
+            set_stat(&format!("{} Nicknaming... {} {:.0}% / {}",
+                random_unux_slashy_thing_someone_invented, progressbar, progress_perc*100.0, name))
         };
 
         for x in mem.into_iter() {
