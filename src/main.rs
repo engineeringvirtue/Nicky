@@ -11,7 +11,7 @@ extern crate kankyo;
 extern crate serenity;
 extern crate rustbreak;
 
-use std::{sync::Arc fmt, collections::HashMap, thread, time::Duration, str::FromStr};
+use std::{sync::Arc, fmt, collections::HashMap, thread, time::Duration, str::FromStr};
 
 use serde_derive::{Deserialize, Serialize};
 
